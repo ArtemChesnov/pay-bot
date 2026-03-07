@@ -45,6 +45,10 @@ async function main() {
   const app = createApp(bot);
   const env = getEnv();
 
+  // Сначала поднимаем HTTP-сервер, чтобы /health и страницы отвечали даже при проблемах с Telegram API
+  httpServer = await startWebServer(app);
+  startCron();
+
   const allowedUpdates = ["message", "callback_query", "chat_join_request", "my_chat_member"] as const;
 
   if (env.USE_POLLING) {
@@ -64,8 +68,6 @@ async function main() {
     logger.info({ webhookUrl }, "Webhook set");
   }
 
-  httpServer = await startWebServer(app);
-  startCron();
   logger.info("Pay-bot started");
 }
 
