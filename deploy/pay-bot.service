@@ -1,0 +1,19 @@
+[Unit]
+Description=Pay-bot Telegram course sales
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=botapp
+Group=botapp
+WorkingDirectory=/opt/bot
+EnvironmentFile=/etc/bot.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pay-bot
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+# Деплой на VPS при пуше в main.
+# Секреты в GitHub: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, SSH_PRIVATE_KEY (инструкция — README_PROD.md, не в репозитории)
+
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci
+            npx prisma generate
+            npm run build
+            npx prisma migrate deploy
+            sudo chown -R botapp:botapp ${{ secrets.DEPLOY_PATH }}
+            sudo systemctl restart pay-bot
+            echo "Deploy done."

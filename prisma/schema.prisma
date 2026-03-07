@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  telegramId     BigInt    @unique @map("telegram_id")
+  username       String?
+  firstName      String?   @map("first_name")
+  name           String?
+  phone          String?
+  consentAt      DateTime? @map("consent_at")
+  policyVersion  String?   @map("policy_version")
+  offerAcceptedAt DateTime? @map("offer_accepted_at")
+  offerVersion   String?   @map("offer_version")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  purchases          Purchase[]
+  supportMessageMaps  SupportMessageMap[]
+
+  @@map("users")
+}
+
+model Tariff {
+  id           String   @id @default(uuid())
+  title        String
+  price        Int
+  durationDays Int      @map("duration_days")
+  type         TariffType
+  isActive     Boolean  @default(true) @map("is_active")
+
+  purchases Purchase[]
+
+  @@map("tariffs")
+}
+
+enum TariffType {
+  SELF
+  INDIVIDUAL
+}
+
+enum PaymentMethod {
+  CARD
+  SBP
+}
+
+enum ProofType {
+  SCREENSHOT
+  TEXT
+}
+
+enum PaymentProvider {
+  MANUAL
+  YOOKASSA
+}
+
+model Purchase {
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  tariffId        String         @map("tariff_id")
+  orderCode       String         @unique @map("order_code")
+
+  paymentProvider PaymentProvider @default(MANUAL) @map("payment_provider")
+  amount          Int?           @map("amount")
+  currency        String         @default("RUB") @map("currency")
+  paymentMethod   PaymentMethod? @map("payment_method")
+
+  status          PurchaseStatus @default(pending)
+  accessPending   Boolean        @default(false) @map("access_pending")
+  accessExpiresAt DateTime?      @map("access_expires_at")
+
+  reviewedAt      DateTime?      @map("reviewed_at")
+  reviewedBy      BigInt?        @map("reviewed_by")
+  rejectReason    String?        @map("reject_reason")
+
+  proofType         ProofType?     @map("proof_type")
+  proofText          String?        @map("proof_text")
+  proofFileId        String?        @map("proof_file_id")
+  proofSubmittedAt   DateTime?      @map("proof_submitted_at")
+
+  ykPaymentId        String?   @unique @map("yk_payment_id")
+  ykStatus           String?  @map("yk_status")
+  ykConfirmationUrl   String?  @map("yk_confirmation_url")
+  ykIdempotenceKey    String?  @map("yk_idempotence_key")
+  ykPaidAt            DateTime? @map("yk_paid_at")
+
+  inviteSentAt       DateTime?      @map("invite_sent_at")
+  lastInviteChatId   BigInt?        @map("last_invite_chat_id")
+
+  individualChatId           BigInt?   @map("individual_chat_id")
+  individualInviteSentAt     DateTime? @map("individual_invite_sent_at")
+  individualLastInviteChatId BigInt?   @map("individual_last_invite_chat_id")
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tariff Tariff @relation(fields: [tariffId], references: [id])
+
+  @@index([status, accessExpiresAt])
+  @@index([userId, createdAt])
+  @@index([tariffId, createdAt])
+  @@map("purchases")
+}
+
+enum PurchaseStatus {
+  pending
+  active
+  rejected
+  expired
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_config")
+}
+
+model SupportMessageMap {
+  id               String   @id @default(uuid())
+  trainerChatId    BigInt   @map("trainer_chat_id")
+  trainerMessageId Int      @map("trainer_message_id")
+  userTelegramId   BigInt   @map("user_telegram_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userTelegramId], references: [telegramId], onDelete: Cascade)
+
+  @@unique([trainerChatId, trainerMessageId])
+  @@index([userTelegramId])
+  @@map("support_message_map")
+}
