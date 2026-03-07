@@ -14,7 +14,8 @@ const REPLACE_PENDING_PREFIX = "replace_pending_";
 const CHECK_PAYMENT_PREFIX = "check_payment_";
 
 /**
- * Inline-кнопка «✨ Начать» под приветствием. По нажатию показывается экран согласия.
+ * Inline-кнопка «✨ Начать» под приветствием (промо или fallback).
+ * По нажатию показывается юридический экран: политика, оферта, кнопки согласия.
  * @returns {ReturnType<Markup["inlineKeyboard"]>} Inline-клавиатура с одной кнопкой
  */
 export function startKeyboard() {

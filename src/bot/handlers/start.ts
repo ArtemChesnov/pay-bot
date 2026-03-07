@@ -2,7 +2,7 @@ import type { BotContext } from "../middleware.js";
 import { consentKeyboard, requestContactKeyboard, startKeyboard, tariffKeyboard } from "../keyboards.js";
 import { getEnv } from "../../lib/env.js";
 import {
-  MSG_WELCOME,
+  MSG_WELCOME_PROMO,
   MSG_START_LEGAL,
   MSG_ASK_NAME,
   MSG_ASK_PHONE,
@@ -11,17 +11,25 @@ import {
 } from "../texts.js";
 
 /**
+ * Отправляет промо-приветствие: один HTML-блок и inline-кнопка «Начать».
+ * Без превью ссылок. По нажатию кнопки вызывается handleStartButton (legal screen).
+ * @param {BotContext} ctx - Контекст Telegraf
+ * @returns {Promise<import("telegraf").Message.TextMessage>}
+ */
+async function sendWelcomePromo(ctx: BotContext) {
+  return ctx.reply(MSG_WELCOME_PROMO, {
+    parse_mode: "HTML",
+    ...startKeyboard(),
+  });
+}
+
+/**
  * Обработчик /start и текста «✨ Начать».
- * Если нет согласия — приветствие + кнопка «Начать». Если есть — следующий шаг (имя/телефон/тариф).
+ * Если нет согласия — промо-приветствие + кнопка «Начать». Если есть — следующий шаг (имя/телефон/тариф).
  * @param {BotContext} ctx - Контекст Telegraf
  * @returns {Promise<import("telegraf").Message.TextMessage | undefined>}
  */
 export async function handleStart(ctx: BotContext) {
-  const env = getEnv();
-  const baseUrl = (env.WEBHOOK_BASE_URL || `http://localhost:${env.PORT}`).replace(/\/$/, "");
-  const policyUrl = `${baseUrl}/policy`;
-  const offerUrl = `${baseUrl}/offer`;
-
   if (ctx.user?.consentAt) {
     if (!ctx.user.name) {
       return ctx.reply(MSG_ASK_NAME);
@@ -32,7 +40,7 @@ export async function handleStart(ctx: BotContext) {
     return ctx.reply(MSG_PHONE_SAVED, tariffKeyboard());
   }
 
-  return ctx.reply(MSG_WELCOME, startKeyboard());
+  return sendWelcomePromo(ctx);
 }
 
 /**
