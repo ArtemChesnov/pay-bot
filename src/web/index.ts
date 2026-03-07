@@ -34,7 +34,7 @@ export function createApp(bot: Telegraf<BotContext>) {
     })
   );
 
-  app.get("/health", healthRouter);
+  app.use("/health", healthRouter);
   app.get("/policy", (_req, res) => {
     const executor =
       env.EXECUTOR_FIO || env.EXECUTOR_INN
