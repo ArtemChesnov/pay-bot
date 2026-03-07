@@ -58,7 +58,7 @@ export async function handleStartButton(ctx: BotContext) {
     return ctx.reply(text, consentKeyboard());
   } catch (err) {
     if (typeof ctx.answerCbQuery === "function") {
-      await ctx.answerCbQuery({ text: "Ошибка. Попробуй ещё раз или /start" }).catch(() => {});
+      await ctx.answerCbQuery("Ошибка. Попробуй ещё раз или /start").catch(() => {});
     }
     return ctx.reply("Не удалось загрузить экран. Нажми /start или кнопку «Начать» ещё раз.").catch(() => undefined);
   }

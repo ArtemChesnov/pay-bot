@@ -13,6 +13,7 @@ build/
 # Локальная пошаговая инструкция деплоя (не коммитить)
 DEPLOY_STEPS.md
 README_PROD.md
+GITHUB_SETUP.md
 
 # Logs and debug
 *.log
