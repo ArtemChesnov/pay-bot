@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seed.ts",
+    "db:clear": "npx tsx prisma/clear-db.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
