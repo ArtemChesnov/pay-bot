@@ -54,60 +54,68 @@ export async function activatePurchase(
   const userChatId = Number(purchase.user.telegramId);
 
   if (purchase.tariff.type === "SELF") {
-    if (selfChatId) {
-      const selfChatIdBig = BigInt(selfChatId);
-      const cooldownMs = env.INVITE_COOLDOWN_MINUTES * 60 * 1000;
-      const withinCooldown =
-        purchase.inviteSentAt &&
-        purchase.lastInviteChatId === selfChatIdBig &&
-        now.getTime() - purchase.inviteSentAt.getTime() < cooldownMs;
-      if (withinCooldown) {
-        logger.debug({ purchaseId: purchase.id }, "SELF invite skipped (cooldown)");
-        await telegram.sendMessage(
-          userChatId,
-          t(MSG_INVITE_COOLDOWN, { MINUTES: String(env.INVITE_COOLDOWN_MINUTES) })
-        );
-      } else {
-        try {
-          const link = await createInviteLink(selfChatId, env.TELEGRAM_BOT_TOKEN);
-          const text = t(MSG_CONFIRMED_SELF_GROUP_READY, { EXPIRES_AT: expiresAtStr, INVITE_LINK: link });
-          await telegram.sendMessage(userChatId, text, {
-            reply_markup: {
-              inline_keyboard: [[{ text: "Перейти в чат", url: link }]],
-            },
-          });
-          await prisma.purchase.update({
-            where: { id: purchase.id },
-            data: {
-              accessPending: false,
-              inviteSentAt: now,
-              lastInviteChatId: selfChatIdBig,
-            },
-          });
-        } catch (e) {
-          if (isIgnorableTgError(e)) {
-            logger.debug({ err: e }, "Ignorable error creating invite");
-          } else {
-            logger.error({ err: e }, "Failed to create invite for SELF");
-          }
+    try {
+      if (selfChatId) {
+        const selfChatIdBig = BigInt(selfChatId);
+        const cooldownMs = env.INVITE_COOLDOWN_MINUTES * 60 * 1000;
+        const withinCooldown =
+          purchase.inviteSentAt &&
+          purchase.lastInviteChatId === selfChatIdBig &&
+          now.getTime() - purchase.inviteSentAt.getTime() < cooldownMs;
+        if (withinCooldown) {
+          logger.debug({ purchaseId: purchase.id }, "SELF invite skipped (cooldown)");
           await telegram.sendMessage(
             userChatId,
-            t(MSG_CONFIRMED_SELF_GROUP_NOT_READY, { EXPIRES_AT: expiresAtStr })
+            t(MSG_INVITE_COOLDOWN, { MINUTES: String(env.INVITE_COOLDOWN_MINUTES) })
           );
+        } else {
+          try {
+            const link = await createInviteLink(selfChatId, env.TELEGRAM_BOT_TOKEN);
+            const text = t(MSG_CONFIRMED_SELF_GROUP_READY, { EXPIRES_AT: expiresAtStr, INVITE_LINK: link });
+            await telegram.sendMessage(userChatId, text, {
+              reply_markup: {
+                inline_keyboard: [[{ text: "Перейти в чат", url: link }]],
+              },
+            });
+            await prisma.purchase.update({
+              where: { id: purchase.id },
+              data: {
+                accessPending: false,
+                inviteSentAt: now,
+                lastInviteChatId: selfChatIdBig,
+              },
+            });
+          } catch (e) {
+            if (isIgnorableTgError(e)) {
+              logger.debug({ err: e }, "Ignorable error creating invite");
+            } else {
+              logger.error({ err: e }, "Failed to create invite for SELF");
+            }
+            await telegram.sendMessage(
+              userChatId,
+              t(MSG_CONFIRMED_SELF_GROUP_NOT_READY, { EXPIRES_AT: expiresAtStr })
+            );
+          }
         }
+      } else {
+        await telegram.sendMessage(
+          userChatId,
+          t(MSG_CONFIRMED_SELF_GROUP_NOT_READY, { EXPIRES_AT: expiresAtStr })
+        );
       }
-    } else {
-      await telegram.sendMessage(
-        userChatId,
-        t(MSG_CONFIRMED_SELF_GROUP_NOT_READY, { EXPIRES_AT: expiresAtStr })
-      );
+    } catch (e) {
+      logger.warn({ err: e, purchaseId: purchase.id }, "Failed to send SELF confirmation to user");
     }
   } else {
     // INDIVIDUAL: клиенту — «оплата получена, тренер свяжется»; тренеру — карточка с контактами для ручной работы
-    await telegram.sendMessage(
-      userChatId,
-      t(MSG_CONFIRMED_INDIVIDUAL_DM_NO_USERNAME, { EXPIRES_AT: expiresAtStr })
-    );
+    try {
+      await telegram.sendMessage(
+        userChatId,
+        t(MSG_CONFIRMED_INDIVIDUAL_DM_NO_USERNAME, { EXPIRES_AT: expiresAtStr })
+      );
+    } catch (e) {
+      logger.warn({ err: e, purchaseId: purchase.id }, "Failed to send INDIVIDUAL confirmation to user");
+    }
     const userLink = `tg://user?id=${purchase.user.telegramId}`;
     const usernameLink = purchase.user.username ? `https://t.me/${purchase.user.username}` : "";
     const trnCard = t(TRN_INDIVIDUAL_NEW_STUDENT, {
@@ -120,7 +128,7 @@ export async function activatePurchase(
       USER_LINK: userLink,
       USERNAME_LINK: usernameLink,
     });
-    await telegram.sendMessage(Number(env.TRAINER_TELEGRAM_ID), trnCard);
+    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnCard, "TRN_INDIVIDUAL_NEW_STUDENT", purchase.id);
   }
 
   const trnMsg = t(TRN_CONFIRMED, {
@@ -131,7 +139,7 @@ export async function activatePurchase(
     PHONE: purchase.user.phone ?? "—",
     TELEGRAM_ID: String(purchase.user.telegramId),
   });
-  await telegram.sendMessage(Number(env.TRAINER_TELEGRAM_ID), trnMsg);
+  await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnMsg, "TRN_CONFIRMED", purchase.id);
 
   const ykNote = purchase.ykPaymentId
     ? t(TRN_YOOKASSA_PAID, {
@@ -140,10 +148,23 @@ export async function activatePurchase(
       })
     : "";
   if (ykNote) {
-    try {
-      await telegram.sendMessage(Number(env.TRAINER_TELEGRAM_ID), ykNote);
-    } catch (e) {
-      logger.warn({ err: e }, "Failed to send YooKassa note to trainer");
-    }
+    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, ykNote, "TRN_YOOKASSA_PAID", purchase.id);
+  }
+}
+
+async function sendToTrainer(
+  telegram: TelegramSender,
+  trainerTelegramId: bigint,
+  text: string,
+  label: string,
+  purchaseId: string
+): Promise<void> {
+  try {
+    await telegram.sendMessage(Number(trainerTelegramId), text);
+  } catch (e) {
+    logger.warn(
+      { err: e, trainerId: String(trainerTelegramId), label, purchaseId },
+      "Failed to send message to trainer — проверьте TRAINER_TELEGRAM_ID и что тренер хотя бы раз написал боту /start"
+    );
   }
 }
