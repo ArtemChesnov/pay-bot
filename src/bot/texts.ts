@@ -255,6 +255,11 @@ export const TRN_BOT_NOT_ADMIN =
 export const TRN_COMMAND_TRAINER_ONLY =
   "Эта команда доступна только тренеру.";
 
+/** Приветствие тренеру при /start (вместо клиентского промо). */
+export const MSG_TRAINER_WELCOME =
+  "Вы зашли как тренер.\n\n" +
+  "Команды: /whoami, /bind_self_group, /grant_pending_self, /export_purchases.";
+
 // —— Кнопки ——
 export const BTN_SHARE_CONTACT = "📞 Поделиться контактом";
 export const BTN_TARIFF_SELF = "🟢 Самостоятельный (3 месяца)";

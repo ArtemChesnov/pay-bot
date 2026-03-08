@@ -1,7 +1,6 @@
 import { Telegraf } from "telegraf";
 import { getEnv } from "../lib/env.js";
 import { loadUser, trainerOnly, type BotContext } from "./middleware.js";
-import { MSG_INDIVIDUAL_WRITE_TO_TRAINER, t } from "./texts.js";
 import { handleStart, handleStartButton } from "./handlers/start.js";
 import { handleConsent, handleConsentDecline } from "./handlers/consent.js";
 import { handleTextName, handleContact } from "./handlers/userData.js";
@@ -15,7 +14,7 @@ import { CALLBACK, startKeyboard } from "./keyboards.js";
 import { setSelfGroupChatId } from "./services.js";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
-import { BTN_START, MSG_FALLBACK_START } from "./texts.js";
+import { BTN_START, MSG_FALLBACK_START, MSG_TRAINER_WELCOME } from "./texts.js";
 
 /** Из ответа Telegram «group chat was upgraded to a supergroup» достаёт migrate_to_chat_id */
 function getMigrateToChatId(err: unknown): number | undefined {
@@ -102,14 +101,6 @@ export function createBot() {
       return;
     }
     if (hasActiveIndividual && ("text" in msg || "photo" in msg || "document" in msg || "video" in msg || "voice" in msg || "animation" in msg || "video_note" in msg)) {
-      const env = getEnv();
-      if (env.INDIVIDUAL_MODE === "DM" || env.INDIVIDUAL_MODE === "MANUAL_GROUP") {
-        const trainerLink = `tg://user?id=${env.TRAINER_TELEGRAM_ID}`;
-        const trainerUsername = env.TRAINER_USERNAME
-          ? `Напишите ему: @${String(env.TRAINER_USERNAME).replace(/^@/, "")}. `
-          : "";
-        return ctx.reply(t(MSG_INDIVIDUAL_WRITE_TO_TRAINER, { TRAINER_USERNAME: trainerUsername, TRAINER_LINK: trainerLink }));
-      }
       await forwardUserToTrainer(ctx);
       return;
     }
@@ -127,6 +118,11 @@ export function createBot() {
   });
 
   bot.on("message", async (ctx) => {
+    const from = ctx.from;
+    if (from && BigInt(from.id) === getEnv().TRAINER_TELEGRAM_ID) {
+      await ctx.reply(MSG_TRAINER_WELCOME);
+      return;
+    }
     try {
       await ctx.reply(MSG_FALLBACK_START, startKeyboard());
     } catch (err) {

@@ -1,6 +1,7 @@
 import type { BotContext } from "../middleware.js";
 import { prisma } from "../../lib/prisma.js";
 import { getEnv } from "../../lib/env.js";
+import { logger } from "../../lib/logger.js";
 import { MSG_INDIVIDUAL_BLOCKED, MSG_FORWARD_FAIL, MSG_SUPPORT_SENT, MSG_SUPPORT_UNSUPPORTED, MSG_FORWARD_FAIL_TRAINER } from "../texts.js";
 
 /**
@@ -46,7 +47,8 @@ export async function forwardUserToTrainer(ctx: BotContext) {
     } else {
       return ctx.reply(MSG_SUPPORT_UNSUPPORTED);
     }
-  } catch {
+  } catch (e) {
+    logger.warn({ err: e, trainerId }, "Forward to trainer failed — проверьте TRAINER_TELEGRAM_ID и что тренер писал боту /start");
     return ctx.reply(MSG_FORWARD_FAIL);
   }
 

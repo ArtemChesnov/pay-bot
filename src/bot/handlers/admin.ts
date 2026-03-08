@@ -14,7 +14,10 @@ export async function handleWhoami(ctx: BotContext) {
   const chat = ctx.chat;
   const from = ctx.from;
   if (!chat || !from || BigInt(from.id) !== getEnv().TRAINER_TELEGRAM_ID) return;
-  const text = `chat_id: ${chat.id}\nuser_id: ${from.id}\nusername: @${from.username ?? "—"}`;
+  const envId = String(getEnv().TRAINER_TELEGRAM_ID);
+  const text =
+    `chat_id: ${chat.id}\nuser_id: ${from.id}\nusername: @${from.username ?? "—"}\n\n` +
+    `TRAINER_TELEGRAM_ID в env: ${envId}\n${from.id.toString() === envId ? "✅ Совпадает — уведомления должны приходить сюда." : "⚠️ Не совпадает — в .env на сервере укажите этот user_id и перезапустите бота."}`;
   return ctx.reply(text);
 }
 

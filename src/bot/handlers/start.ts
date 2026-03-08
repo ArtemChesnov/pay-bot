@@ -7,6 +7,7 @@ import {
   MSG_ASK_NAME,
   MSG_ASK_PHONE,
   MSG_PHONE_SAVED,
+  MSG_TRAINER_WELCOME,
   t,
 } from "../texts.js";
 
@@ -30,6 +31,10 @@ async function sendWelcomePromo(ctx: BotContext) {
  * @returns {Promise<import("telegraf").Message.TextMessage | undefined>}
  */
 export async function handleStart(ctx: BotContext) {
+  const from = ctx.from;
+  if (from && BigInt(from.id) === getEnv().TRAINER_TELEGRAM_ID) {
+    return ctx.reply(MSG_TRAINER_WELCOME);
+  }
   if (ctx.user?.consentAt) {
     if (!ctx.user.name) {
       return ctx.reply(MSG_ASK_NAME);
