@@ -5,16 +5,12 @@
  * На сервере (env в /etc/bot.env): ENV_FILE=/etc/bot.env npm run db:clear
  */
 
-import "dotenv/config";
-import dotenv from "dotenv";
-if (!process.env.DATABASE_URL) {
-  dotenv.config({ path: process.env.ENV_FILE || "/etc/bot.env" });
-  if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL не задан. Задайте в .env или: ENV_FILE=/etc/bot.env npm run db:clear");
-    process.exit(1);
-  }
-}
+import "./load-env";
 import { PrismaClient } from "@prisma/client";
+if (!process.env.DATABASE_URL) {
+  console.error("DATABASE_URL не задан. Задайте в .env или: ENV_FILE=/etc/bot.env npm run db:clear");
+  process.exit(1);
+}
 
 const prisma = new PrismaClient();
 
