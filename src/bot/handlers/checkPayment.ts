@@ -7,6 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getEnv } from "../../lib/env.js";
 import { getPayment } from "../../lib/yookassa.js";
 import { activatePurchase } from "../../lib/activatePurchase.js";
+import { getSelfGroupId, createInviteLink } from "../services.js";
 import {
   MSG_PAYMENT_CHECK_PENDING,
   MSG_PAYMENT_CHECK_CANCELED,
@@ -14,7 +15,11 @@ import {
   MSG_PAYMENT_CHECK_UNAVAILABLE,
   MSG_PAYMENT_AMOUNT_MISMATCH,
   MSG_PAYMENT_ORDER_NOT_FOUND,
+  MSG_PAYMENT_ALREADY_ACTIVE,
+  MSG_CONFIRMED_SELF_GROUP_READY,
 } from "../texts.js";
+import { t } from "../texts.js";
+import { logger } from "../../lib/logger.js";
 
 const CHECK_PAYMENT_PREFIX = "check_payment_";
 
@@ -38,7 +43,33 @@ export async function handleCheckPayment(ctx: BotContext) {
     include: { user: true, tariff: true },
   });
 
-  if (!purchase || purchase.userId !== user.id || purchase.status !== "pending") {
+  if (!purchase || purchase.userId !== user.id) {
+    return ctx.reply(MSG_PAYMENT_ORDER_NOT_FOUND);
+  }
+  if (purchase.status === "active") {
+    const expiresAtStr = purchase.accessExpiresAt
+      ? purchase.accessExpiresAt.toLocaleDateString("ru-RU")
+      : "";
+    if (purchase.tariff.type === "SELF") {
+      const selfChatId = await getSelfGroupId();
+      if (selfChatId) {
+        try {
+          const env = getEnv();
+          const link = await createInviteLink(selfChatId, env.TELEGRAM_BOT_TOKEN);
+          const text = t(MSG_CONFIRMED_SELF_GROUP_READY, { EXPIRES_AT: expiresAtStr, INVITE_LINK: link });
+          return ctx.reply(text, {
+            reply_markup: {
+              inline_keyboard: [[{ text: "Перейти в чат", url: link }]],
+            },
+          });
+        } catch {
+          // чат не настроен или ошибка API — отправляем общее сообщение
+        }
+      }
+    }
+    return ctx.reply(MSG_PAYMENT_ALREADY_ACTIVE);
+  }
+  if (purchase.status !== "pending") {
     return ctx.reply(MSG_PAYMENT_ORDER_NOT_FOUND);
   }
 
@@ -86,7 +117,8 @@ export async function handleCheckPayment(ctx: BotContext) {
       await activatePurchase(updated, ctx.telegram);
       return ctx.reply(MSG_PAYMENT_CHECK_SUCCESS);
     }
-  } catch {
+  } catch (err) {
+    logger.warn({ err, purchaseId }, "Check payment: getPayment failed");
     return ctx.reply(MSG_PAYMENT_CHECK_UNAVAILABLE);
   }
 }

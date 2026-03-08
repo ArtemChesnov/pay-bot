@@ -12,8 +12,22 @@ import { handleBindSelfGroup, handleGrantPendingSelf, handleGrantPendingSelfCall
 import { forwardUserToTrainer, deliverTrainerReplyToUser } from "./handlers/support.js";
 import { handleWhoami, handleExportPurchases } from "./handlers/admin.js";
 import { CALLBACK, startKeyboard } from "./keyboards.js";
+import { setSelfGroupChatId } from "./services.js";
 import { prisma } from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 import { BTN_START, MSG_FALLBACK_START } from "./texts.js";
+
+/** Из ответа Telegram «group chat was upgraded to a supergroup» достаёт migrate_to_chat_id */
+function getMigrateToChatId(err: unknown): number | undefined {
+  const o = err && typeof err === "object" ? err as Record<string, unknown> : null;
+  const params = o?.response && typeof o.response === "object"
+    ? (o.response as Record<string, unknown>).parameters
+    : o?.parameters;
+  if (params && typeof params === "object" && typeof (params as Record<string, unknown>).migrate_to_chat_id === "number") {
+    return (params as Record<string, number>).migrate_to_chat_id;
+  }
+  return undefined;
+}
 
 /**
  * Создаёт и настраивает экземпляр Telegraf-бота: команды, actions, message handlers.
@@ -112,7 +126,29 @@ export function createBot() {
     return next();
   });
 
-  bot.on("message", (ctx) => ctx.reply(MSG_FALLBACK_START, startKeyboard()));
+  bot.on("message", async (ctx) => {
+    try {
+      await ctx.reply(MSG_FALLBACK_START, startKeyboard());
+    } catch (err) {
+      const newChatId = getMigrateToChatId(err);
+      if (newChatId !== undefined) {
+        logger.info({ oldChatId: ctx.chat?.id, migrate_to_chat_id: newChatId }, "Group upgraded to supergroup, updating SELF_GROUP_ID");
+        await setSelfGroupChatId(String(newChatId));
+        await ctx.telegram.sendMessage(newChatId, MSG_FALLBACK_START, startKeyboard());
+        return;
+      }
+      logger.warn({ err, chatId: ctx.chat?.id }, "Fallback reply failed");
+    }
+  });
+
+  bot.catch((err, ctx) => {
+    const newChatId = getMigrateToChatId(err);
+    if (newChatId !== undefined) {
+      logger.info({ migrate_to_chat_id: newChatId }, "Telegram: group upgraded to supergroup (update SELF_GROUP_ID to this id)");
+      void setSelfGroupChatId(String(newChatId)).catch((e) => logger.warn({ err: e }, "setSelfGroupChatId failed"));
+    }
+    logger.warn({ err, updateType: ctx.updateType }, "Bot handler error");
+  });
 
   void bot.telegram.setMyCommands([{ command: "start", description: "Начать оформление доступа" }]).catch(() => {});
 
