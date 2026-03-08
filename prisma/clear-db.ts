@@ -2,9 +2,18 @@
  * Очистка данных бота: пользователи, заявки, переписка с тренером, системный конфиг.
  * Тарифы не удаляются — после очистки можно сразу оформлять новые заявки.
  * Запуск: npm run db:clear  или  npx tsx prisma/clear-db.ts
+ * На сервере (env в /etc/bot.env): ENV_FILE=/etc/bot.env npm run db:clear
  */
 
 import "dotenv/config";
+import dotenv from "dotenv";
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: process.env.ENV_FILE || "/etc/bot.env" });
+  if (!process.env.DATABASE_URL) {
+    console.error("DATABASE_URL не задан. Задайте в .env или: ENV_FILE=/etc/bot.env npm run db:clear");
+    process.exit(1);
+  }
+}
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
