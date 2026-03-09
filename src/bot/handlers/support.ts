@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getEnv } from "../../lib/env.js";
 import { logger } from "../../lib/logger.js";
 import { MSG_INDIVIDUAL_BLOCKED, MSG_FORWARD_FAIL, MSG_SUPPORT_SENT, MSG_SUPPORT_UNSUPPORTED, MSG_FORWARD_FAIL_TRAINER } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 
 /**
  * Пересылает сообщение пользователя тренеру (индивидуальный тариф).
@@ -61,6 +62,13 @@ export async function forwardUserToTrainer(ctx: BotContext) {
       },
     });
   }
+  logAnalyticsEvent("support_message_sent", {
+    userId: String(user.id),
+    purchaseId: active.id,
+    orderCode: active.orderCode,
+    tariffType: active.tariff.type,
+    source: "individual_support",
+  });
   return ctx.reply(MSG_SUPPORT_SENT);
 }
 

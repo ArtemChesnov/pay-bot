@@ -1,7 +1,8 @@
 import type { BotContext } from "../middleware.js";
 import { prisma } from "../../lib/prisma.js";
 import { requestContactKeyboard, tariffKeyboard } from "../keyboards.js";
-import { MSG_ASK_PHONE, MSG_PHONE_SAVED } from "../texts.js";
+import { MSG_ASK_PHONE, MSG_PHONE_SAVED, MSG_TARIFF_PICK } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 
 /**
  * Сохраняет имя из текстового сообщения и переходит к запросу телефона или тарифа.
@@ -19,6 +20,11 @@ export async function handleTextName(ctx: BotContext) {
     data: { name: text },
   });
   ctx.user = { ...user, name: updated.name };
+
+  logAnalyticsEvent("registration_name_saved", {
+    userId: String(updated.id),
+    source: "text_name",
+  });
 
   if (!updated.phone) {
     return ctx.reply(MSG_ASK_PHONE, requestContactKeyboard());
@@ -43,5 +49,14 @@ export async function handleContact(ctx: BotContext) {
   });
   ctx.user = { ...user, phone };
 
-  return ctx.reply(MSG_PHONE_SAVED, tariffKeyboard());
+  logAnalyticsEvent("registration_phone_saved", {
+    userId: String(user.id),
+    source: "contact_share",
+  });
+
+  await ctx.reply(MSG_PHONE_SAVED, {
+    reply_markup: { remove_keyboard: true },
+  });
+
+  return ctx.reply(MSG_TARIFF_PICK, tariffKeyboard());
 }

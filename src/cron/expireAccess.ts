@@ -7,6 +7,7 @@ import { activatePurchase } from "../lib/activatePurchase.js";
 import { getSelfGroupChatId } from "../bot/services.js";
 import { isIgnorableTgError } from "../lib/telegramErrors.js";
 import { MSG_EXPIRED_SELF, MSG_EXPIRED_INDIVIDUAL, TRN_EXPIRED, t } from "../bot/texts.js";
+import { logAnalyticsEvent } from "../lib/analytics.js";
 
 export function startCron() {
   const tz = getEnv().CRON_TZ;
@@ -94,6 +95,12 @@ async function expirePending() {
   }
 }
 
+/**
+ * Переводит active-покупки с истёкшим accessExpiresAt в статус expired,
+ * аккуратно удаляет пользователей из чатов и отправляет мягкие уведомления о завершении доступа.
+ * Логирует события окончания доступа по обоим тарифам.
+ * @returns {Promise<void>}
+ */
 async function expireAccess() {
   const now = new Date();
   const expired = await prisma.purchase.findMany({
@@ -133,6 +140,23 @@ async function expireAccess() {
       const expiredDate = p.accessExpiresAt?.toLocaleDateString("ru-RU") ?? "";
       const msgUser = p.tariff.type === "SELF" ? MSG_EXPIRED_SELF : MSG_EXPIRED_INDIVIDUAL;
       await bot.telegram.sendMessage(Number(p.user.telegramId), msgUser);
+      if (p.tariff.type === "SELF") {
+        logAnalyticsEvent("access_expired_self", {
+          userId: String(p.userId),
+          purchaseId: p.id,
+          orderCode: p.orderCode,
+          tariffType: p.tariff.type,
+          source: "cron_expire_access",
+        });
+      } else {
+        logAnalyticsEvent("access_expired_individual", {
+          userId: String(p.userId),
+          purchaseId: p.id,
+          orderCode: p.orderCode,
+          tariffType: p.tariff.type,
+          source: "cron_expire_access",
+        });
+      }
       const trnMsg = t(TRN_EXPIRED, {
         ORDER_CODE: p.orderCode,
         TARIFF_TITLE: p.tariff.title,

@@ -14,6 +14,7 @@ import {
   MSG_PAYMENT_ORDER_NOT_FOUND,
   t,
 } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 import { TariffType, PaymentProvider } from "@prisma/client";
 import { getEnv } from "../../lib/env.js";
 import { createPayment } from "../../lib/yookassa.js";
@@ -54,6 +55,13 @@ function getBaseUrl(env: ReturnType<typeof getEnv>): string {
  * @param {TariffType} type - Тип тарифа (SELF или INDIVIDUAL)
  * @returns {Promise<import("telegraf").Message.TextMessage | undefined>}
  */
+/**
+ * Создаёт или показывает pending-заявку по выбранному тарифу.
+ * Логирует выбор тарифа и выдачу ссылки на оплату.
+ * @param {BotContext} ctx - Контекст Telegraf
+ * @param {TariffType} type - Тип тарифа (SELF или INDIVIDUAL)
+ * @returns {Promise<import("telegraf").Message.TextMessage | undefined>}
+ */
 async function handleTariff(ctx: BotContext, type: TariffType) {
   await ctx.answerCbQuery?.();
   const user = ctx.user;
@@ -65,6 +73,12 @@ async function handleTariff(ctx: BotContext, type: TariffType) {
   if (!tariff) {
     return ctx.reply(MSG_TARIFF_UNAVAILABLE);
   }
+
+  logAnalyticsEvent("tariff_selected", {
+    userId: String(user.id),
+    tariffType: type,
+    source: "tariff_inline",
+  });
 
   const env = getEnv();
   const useYooKassa = isYooKassaEnabled();
@@ -83,6 +97,13 @@ async function handleTariff(ctx: BotContext, type: TariffType) {
     });
     const text = `${mainText}\n\n${MSG_EXISTING_PENDING}`;
     if (existingPending.paymentProvider === "YOOKASSA" && existingPending.ykConfirmationUrl) {
+      logAnalyticsEvent("payment_link_sent", {
+        userId: String(user.id),
+        purchaseId: existingPending.id,
+        orderCode: existingPending.orderCode,
+        tariffType: tariff.type,
+        source: "existing_pending",
+      });
       const keyboard = yookassaPayKeyboard(existingPending.ykConfirmationUrl, existingPending.id);
       return ctx.reply(text, keyboard);
     }
@@ -141,6 +162,16 @@ async function handleTariff(ctx: BotContext, type: TariffType) {
     const keyboard = result.confirmationUrl
       ? yookassaPayKeyboard(result.confirmationUrl, purchase.id)
       : yookassaCheckOnlyKeyboard(purchase.id);
+
+    if (result.confirmationUrl) {
+      logAnalyticsEvent("payment_link_sent", {
+        userId: String(user.id),
+        purchaseId: purchase.id,
+        orderCode,
+        tariffType: tariff.type,
+        source: "new_purchase",
+      });
+    }
     return ctx.reply(text, keyboard);
   } catch (e) {
     logger.error({ err: e, orderCode }, "YooKassa createPayment failed");

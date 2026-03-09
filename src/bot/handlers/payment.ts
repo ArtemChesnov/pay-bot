@@ -6,6 +6,7 @@ import {
   MSG_YOOKASSA_USE_BUTTONS,
   MSG_MANUAL_DISABLED,
 } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 
 /**
  * Обработчик «Я оплатил(а)»: просит прислать подтверждение оплаты.
@@ -16,6 +17,11 @@ export async function handlePaymentDone(ctx: BotContext) {
   await ctx.answerCbQuery?.();
   const user = ctx.user;
   if (!user) return;
+
+  logAnalyticsEvent("payment_done_clicked", {
+    userId: String(user.id),
+    source: "manual_paid_button",
+  });
 
   return ctx.reply(MSG_PROOF_REQUEST);
 }
@@ -36,6 +42,10 @@ export async function handlePaymentProof(ctx: BotContext) {
     include: { tariff: true },
   });
   if (!pending) {
+    logAnalyticsEvent("payment_not_found_shown", {
+      userId: String(user.id),
+      source: "payment_proof",
+    });
     return ctx.reply(MSG_PAYMENT_NOT_FOUND);
   }
   if (pending.paymentProvider === "YOOKASSA") {

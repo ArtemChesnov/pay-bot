@@ -22,6 +22,7 @@ import {
   t,
   BTN_GRANT_ACCESS,
 } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 
 export async function handleBindSelfGroup(ctx: BotContext) {
   const chat = ctx.chat;
@@ -311,6 +312,13 @@ export async function handleBindIndividualChat(ctx: BotContext) {
     await prisma.purchase.update({
       where: { id: purchase.id },
       data: { individualInviteSentAt: now, individualLastInviteChatId: chatIdBig },
+    });
+    logAnalyticsEvent("individual_access_activated", {
+      userId: String(purchase.userId),
+      purchaseId: purchase.id,
+      orderCode: purchase.orderCode,
+      tariffType: purchase.tariff.type,
+      source: "bind_individual_chat",
     });
   } catch (e) {
     if (isIgnorableTgError(e)) {

@@ -8,9 +8,11 @@ import { getEnv } from "./env.js";
 import { getSelfGroupId, createInviteLink } from "../bot/services.js";
 import { logger } from "./logger.js";
 import { isIgnorableTgError } from "./telegramErrors.js";
+import { logAnalyticsEvent } from "./analytics.js";
 import {
   MSG_CONFIRMED_SELF_GROUP_READY,
   MSG_CONFIRMED_SELF_GROUP_NOT_READY,
+  MSG_CONFIRMED_INDIVIDUAL_DM,
   MSG_CONFIRMED_INDIVIDUAL_DM_NO_USERNAME,
   MSG_INVITE_COOLDOWN,
   TRN_CONFIRMED,
@@ -26,6 +28,38 @@ type TelegramSender = {
   sendMessage: (chatId: number, text: string, extra?: Record<string, unknown>) => Promise<unknown>;
 };
 
+/**
+ * Приводит номер телефона к человекочитаемому виду для отображения в сообщениях.
+ *
+ * - Если номер похож на российский (11 цифр, начинается с 7 или 8), форматирует как `+7 901 688-86-59`.
+ * - Если формат распознать нельзя, возвращает исходную строку.
+ * - Хранение номера в БД не меняет, используется только для текста сообщений.
+ *
+ * @param {string | null | undefined} phone - Исходный номер телефона из БД
+ * @returns {string} Отформатированный номер или исходное значение / «—»
+ */
+export function formatPhoneForDisplay(phone: string | null | undefined): string {
+  if (!phone) return "—";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 11 && (digits.startsWith("7") || digits.startsWith("8"))) {
+    const rest = digits.slice(1);
+    const part1 = rest.slice(0, 3);
+    const part2 = rest.slice(3, 6);
+    const part3 = rest.slice(6, 8);
+    const part4 = rest.slice(8, 10);
+    return `+7 ${part1} ${part2}-${part3}-${part4}`;
+  }
+  return phone;
+}
+
+/**
+ * Активирует pending-заявку: переводит её в статус active, расчитывает срок доступа,
+ * уведомляет пользователя и тренера и, при необходимости, отправляет/создаёт инвайт в чат.
+ * Вызывается из webhook YooKassa, кнопки «Проверить оплату» и команды /force_activate.
+ * @param {PurchaseWithRelations} purchase - Заявка с загруженными пользователем и тарифом
+ * @param {TelegramSender} telegram - Отправитель сообщений (обычно bot.telegram)
+ * @returns {Promise<void>}
+ */
 export async function activatePurchase(
   purchase: PurchaseWithRelations,
   telegram: TelegramSender
@@ -85,6 +119,13 @@ export async function activatePurchase(
                 lastInviteChatId: selfChatIdBig,
               },
             });
+            logAnalyticsEvent("self_access_activated", {
+              userId: String(purchase.userId),
+              purchaseId: purchase.id,
+              orderCode: purchase.orderCode,
+              tariffType: purchase.tariff.type,
+              source: "activate_purchase_self_with_chat",
+            });
           } catch (e) {
             if (isIgnorableTgError(e)) {
               logger.debug({ err: e }, "Ignorable error creating invite");
@@ -107,48 +148,83 @@ export async function activatePurchase(
       logger.warn({ err: e, purchaseId: purchase.id }, "Failed to send SELF confirmation to user");
     }
   } else {
-    // INDIVIDUAL: клиенту — «оплата получена, тренер свяжется»; тренеру — карточка с контактами для ручной работы
+    // INDIVIDUAL: клиенту — подтверждение тарифа и тренера; тренеру — одно объединённое уведомление
     try {
-      await telegram.sendMessage(
-        userChatId,
-        t(MSG_CONFIRMED_INDIVIDUAL_DM_NO_USERNAME, { EXPIRES_AT: expiresAtStr })
-      );
+      if (purchase.user.username) {
+        await telegram.sendMessage(
+          userChatId,
+          t(MSG_CONFIRMED_INDIVIDUAL_DM, {
+            EXPIRES_AT: expiresAtStr,
+            TRAINER_USERNAME: `@${purchase.user.username}`,
+          })
+        );
+      } else {
+        await telegram.sendMessage(
+          userChatId,
+          t(MSG_CONFIRMED_INDIVIDUAL_DM_NO_USERNAME, { EXPIRES_AT: expiresAtStr })
+        );
+      }
+      logAnalyticsEvent("individual_access_pending", {
+        userId: String(purchase.userId),
+        purchaseId: purchase.id,
+        orderCode: purchase.orderCode,
+        tariffType: purchase.tariff.type,
+        source: "activate_purchase_individual",
+      });
     } catch (e) {
       logger.warn({ err: e, purchaseId: purchase.id }, "Failed to send INDIVIDUAL confirmation to user");
     }
+
     const userLink = `tg://user?id=${purchase.user.telegramId}`;
-    const usernameLink = purchase.user.username ? `https://t.me/${purchase.user.username}` : "";
+    const usernameLink = purchase.user.username ? `https://t.me/${purchase.user.username}` : "—";
+    const formattedPhone = formatPhoneForDisplay(purchase.user.phone);
+    const priceRubles = purchase.amount ?? purchase.tariff.price ?? 0;
+    const paymentLine =
+      purchase.paymentProvider === "YOOKASSA"
+        ? purchase.ykPaymentId
+          ? `Оплата подтверждена через ЮKassa (ID: ${purchase.ykPaymentId}).`
+          : "Оплата подтверждена через ЮKassa."
+        : "Оплата подтверждена.";
+
     const trnCard = t(TRN_INDIVIDUAL_NEW_STUDENT, {
+      PAYMENT_LINE: paymentLine,
       ORDER_CODE: purchase.orderCode,
-      NAME: purchase.user.name ?? "—",
-      PHONE: purchase.user.phone ?? "—",
-      USERNAME: purchase.user.username ? `@${purchase.user.username}` : "—",
-      TELEGRAM_ID: String(purchase.user.telegramId),
+      PRICE: String(priceRubles),
       EXPIRES_AT: expiresAtStr,
+      NAME: purchase.user.name ?? "—",
+      PHONE: formattedPhone,
+      USERNAME: purchase.user.username ?? "—",
+      TELEGRAM_ID: String(purchase.user.telegramId),
       USER_LINK: userLink,
       USERNAME_LINK: usernameLink,
     });
     await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnCard, "TRN_INDIVIDUAL_NEW_STUDENT", purchase.id);
   }
 
-  const trnMsg = t(TRN_CONFIRMED, {
-    ORDER_CODE: purchase.orderCode,
-    TARIFF_TITLE: purchase.tariff.title,
-    EXPIRES_AT: expiresAtStr,
-    NAME: purchase.user.name ?? "—",
-    PHONE: purchase.user.phone ?? "—",
-    TELEGRAM_ID: String(purchase.user.telegramId),
-  });
-  await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnMsg, "TRN_CONFIRMED", purchase.id);
+  // Общие служебные уведомления тренеру: для SELF сохраняем существующий формат,
+  // для INDIVIDUAL не создаём дополнительный шум (данные уже есть в карточке TRN_INDIVIDUAL_NEW_STUDENT).
+  if (purchase.tariff.type === "SELF") {
+    const formattedPhone = formatPhoneForDisplay(purchase.user.phone);
 
-  const ykNote = purchase.ykPaymentId
-    ? t(TRN_YOOKASSA_PAID, {
-        YK_PAYMENT_ID: purchase.ykPaymentId,
-        ORDER_CODE: purchase.orderCode,
-      })
-    : "";
-  if (ykNote) {
-    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, ykNote, "TRN_YOOKASSA_PAID", purchase.id);
+    const trnMsg = t(TRN_CONFIRMED, {
+      ORDER_CODE: purchase.orderCode,
+      TARIFF_TITLE: purchase.tariff.title,
+      EXPIRES_AT: expiresAtStr,
+      NAME: purchase.user.name ?? "—",
+      PHONE: formattedPhone,
+      TELEGRAM_ID: String(purchase.user.telegramId),
+    });
+    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnMsg, "TRN_CONFIRMED", purchase.id);
+
+    const ykNote = purchase.ykPaymentId
+      ? t(TRN_YOOKASSA_PAID, {
+          YK_PAYMENT_ID: purchase.ykPaymentId,
+          ORDER_CODE: purchase.orderCode,
+        })
+      : "";
+    if (ykNote) {
+      await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, ykNote, "TRN_YOOKASSA_PAID", purchase.id);
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getEnv } from "../../lib/env.js";
 import { requestContactKeyboard, startKeyboard, tariffKeyboard } from "../keyboards.js";
 import { MSG_ASK_NAME, MSG_ASK_PHONE, MSG_PHONE_SAVED, MSG_START_DECLINED } from "../texts.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 
 /**
  * Обработчик «Согласен(на) и продолжить»: сохраняет consent в БД, переходит к имени/телефону/тарифу.
@@ -51,6 +52,11 @@ export async function handleConsent(ctx: BotContext) {
     consentAt: user.consentAt,
   };
 
+  logAnalyticsEvent("legal_accepted", {
+    userId: String(user.id),
+    source: "start_legal",
+  });
+
   if (!user.name) {
     return ctx.reply(MSG_ASK_NAME);
   }
@@ -67,5 +73,7 @@ export async function handleConsent(ctx: BotContext) {
  */
 export async function handleConsentDecline(ctx: BotContext) {
   await ctx.answerCbQuery?.();
+  const userId = ctx.user ? String(ctx.user.id) : undefined;
+  logAnalyticsEvent("legal_declined", { userId, source: "start_legal" });
   return ctx.reply(MSG_START_DECLINED, startKeyboard());
 }

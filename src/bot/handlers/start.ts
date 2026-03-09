@@ -1,6 +1,7 @@
 import type { BotContext } from "../middleware.js";
 import { consentKeyboard, requestContactKeyboard, startKeyboard, tariffKeyboard } from "../keyboards.js";
 import { getEnv } from "../../lib/env.js";
+import { logAnalyticsEvent } from "../../lib/analytics.js";
 import {
   MSG_WELCOME_PROMO,
   MSG_START_LEGAL,
@@ -18,6 +19,8 @@ import {
  * @returns {Promise<import("telegraf").Message.TextMessage>}
  */
 async function sendWelcomePromo(ctx: BotContext) {
+  const userId = ctx.user ? String(ctx.user.id) : undefined;
+  logAnalyticsEvent("bot_start_opened", { userId, source: "command_or_button" });
   return ctx.reply(MSG_WELCOME_PROMO, {
     parse_mode: "HTML",
     ...startKeyboard(),
@@ -68,11 +71,13 @@ export async function handleStartButton(ctx: BotContext) {
     // игнорируем ошибку answerCbQuery, продолжаем показывать экран
   }
   try {
+    const userId = ctx.user ? String(ctx.user.id) : undefined;
     const env = getEnv();
     const baseUrl = (env.WEBHOOK_BASE_URL || `http://localhost:${env.PORT}`).replace(/\/$/, "");
     const policyUrl = `${baseUrl}/policy`;
     const offerUrl = `${baseUrl}/offer`;
     const text = t(MSG_START_LEGAL, { POLICY_URL: policyUrl, OFFER_URL: offerUrl });
+    logAnalyticsEvent("legal_screen_shown", { userId, source: "start_legal" });
     return ctx.reply(text, consentKeyboard());
   } catch (err) {
     if (typeof ctx.answerCbQuery === "function") {

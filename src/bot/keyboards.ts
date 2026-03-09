@@ -35,10 +35,11 @@ export function consentKeyboard() {
 
 /**
  * Reply-клавиатура с кнопкой «Поделиться контактом» для запроса телефона.
+ * oneTime() просит клиента скрыть клавиатуру после нажатия.
  * @returns {ReturnType<Markup["keyboard"]>} Клавиатура с одной кнопкой
  */
 export function requestContactKeyboard() {
-  return Markup.keyboard([ [ Markup.button.contactRequest(BTN_SHARE_CONTACT) ]   ]).resize();
+  return Markup.keyboard([[Markup.button.contactRequest(BTN_SHARE_CONTACT)]]).resize().oneTime();
 }
 
 /**
