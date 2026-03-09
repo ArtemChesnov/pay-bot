@@ -5,10 +5,10 @@
 
 import { prisma } from "./prisma.js";
 import { getEnv } from "./env.js";
-import { getSelfGroupId, createInviteLink } from "../bot/services.js";
 import { logger } from "./logger.js";
 import { isIgnorableTgError } from "./telegramErrors.js";
 import { logAnalyticsEvent } from "./analytics.js";
+import { getSelfGroupId, createInviteLink } from "../bot/services.js";
 import {
   MSG_CONFIRMED_SELF_GROUP_READY,
   MSG_CONFIRMED_SELF_GROUP_NOT_READY,
