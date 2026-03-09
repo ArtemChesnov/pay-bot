@@ -72,8 +72,8 @@ export async function setSelfGroupChatId(chatId: string): Promise<void> {
   });
 }
 
-/** member_limit=1, expire_date=now+expireMinutes (default 10) */
-export async function createInviteLink(chatId: string, botToken: string, expireMinutes = 10): Promise<string> {
+/** member_limit=1, expire_date=now+expireMinutes (default 60) */
+export async function createInviteLink(chatId: string, botToken: string, expireMinutes = 60): Promise<string> {
   const expire = Math.floor(Date.now() / 1000) + expireMinutes * 60;
   const url = `https://api.telegram.org/bot${botToken}/createChatInviteLink?chat_id=${chatId}&member_limit=1&expire_date=${expire}`;
   const res = await fetch(url);
