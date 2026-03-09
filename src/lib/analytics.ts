@@ -13,6 +13,7 @@ export type AnalyticsEventName =
   | "payment_check_pending"
   | "payment_check_canceled"
   | "payment_confirmed"
+  | "payment_done_clicked"
   | "payment_already_active"
   | "self_access_activated"
   | "individual_access_pending"
