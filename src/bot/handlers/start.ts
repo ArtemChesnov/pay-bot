@@ -35,6 +35,11 @@ export async function handleStart(ctx: BotContext) {
   if (from && BigInt(from.id) === getEnv().TRAINER_TELEGRAM_ID) {
     return ctx.reply(MSG_TRAINER_WELCOME);
   }
+  const chatType = ctx.chat?.type;
+  if (chatType && chatType !== "private") {
+    // В группах и супергруппах /start для клиентов не нужен — ничего не делаем.
+    return;
+  }
   if (ctx.user?.consentAt) {
     if (!ctx.user.name) {
       return ctx.reply(MSG_ASK_NAME);
