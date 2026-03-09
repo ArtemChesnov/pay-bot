@@ -276,7 +276,7 @@ export const TRN_INDIVIDUAL_NEW_STUDENT =
   "1. Создать личный чат с учеником\n" +
   "2. Добавить туда бота администратором\n" +
   "3. Внутри чата отправить команду:\n" +
-  "   /bind_individual_chat {ORDER_CODE}\n\n" +
+  "/bind_individual_chat {ORDER_CODE}\n\n" +
   "Напоминание: чек самозанятого нужно сформировать в «Мой налог» и отправить покупателю.";
 
 export const TRN_INDIVIDUAL_CREATE_GROUP_INSTRUCTION =

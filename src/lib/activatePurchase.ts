@@ -150,12 +150,17 @@ export async function activatePurchase(
   } else {
     // INDIVIDUAL: клиенту — подтверждение тарифа и тренера; тренеру — одно объединённое уведомление
     try {
-      if (purchase.user.username) {
+      const trainerFromEnv = getEnv().TRAINER_USERNAME;
+      const trainerUsername =
+        trainerFromEnv && String(trainerFromEnv).trim() !== ""
+          ? `@${String(trainerFromEnv).replace(/^@/, "")}`
+          : null;
+      if (trainerUsername) {
         await telegram.sendMessage(
           userChatId,
           t(MSG_CONFIRMED_INDIVIDUAL_DM, {
             EXPIRES_AT: expiresAtStr,
-            TRAINER_USERNAME: `@${purchase.user.username}`,
+            TRAINER_USERNAME: trainerUsername,
           })
         );
       } else {
@@ -206,7 +211,7 @@ export async function activatePurchase(
   if (purchase.tariff.type === "SELF") {
     const formattedPhone = formatPhoneForDisplay(purchase.user.phone);
 
-    const trnMsg = t(TRN_CONFIRMED, {
+    const baseMsg = t(TRN_CONFIRMED, {
       ORDER_CODE: purchase.orderCode,
       TARIFF_TITLE: purchase.tariff.title,
       EXPIRES_AT: expiresAtStr,
@@ -214,17 +219,14 @@ export async function activatePurchase(
       PHONE: formattedPhone,
       TELEGRAM_ID: String(purchase.user.telegramId),
     });
-    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trnMsg, "TRN_CONFIRMED", purchase.id);
-
     const ykNote = purchase.ykPaymentId
       ? t(TRN_YOOKASSA_PAID, {
           YK_PAYMENT_ID: purchase.ykPaymentId,
           ORDER_CODE: purchase.orderCode,
         })
       : "";
-    if (ykNote) {
-      await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, ykNote, "TRN_YOOKASSA_PAID", purchase.id);
-    }
+    const trainerText = ykNote ? `${baseMsg}\n\n${ykNote}` : baseMsg;
+    await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trainerText, "TRN_CONFIRMED_SELF", purchase.id);
   }
 }
 
