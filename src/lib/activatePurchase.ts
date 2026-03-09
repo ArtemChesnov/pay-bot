@@ -210,22 +210,29 @@ export async function activatePurchase(
   // для INDIVIDUAL не создаём дополнительный шум (данные уже есть в карточке TRN_INDIVIDUAL_NEW_STUDENT).
   if (purchase.tariff.type === "SELF") {
     const formattedPhone = formatPhoneForDisplay(purchase.user.phone);
+    const userLink = `tg://user?id=${purchase.user.telegramId}`;
+    const usernameLink = purchase.user.username ? `https://t.me/${purchase.user.username}` : "—";
+    const priceRubles = purchase.amount ?? purchase.tariff.price ?? 0;
+    const paymentLine =
+      purchase.paymentProvider === "YOOKASSA"
+        ? purchase.ykPaymentId
+          ? `Оплата подтверждена через ЮKassa (ID: ${purchase.ykPaymentId}).`
+          : "Оплата подтверждена через ЮKassa."
+        : "Оплата подтверждена.";
 
-    const baseMsg = t(TRN_CONFIRMED, {
-      ORDER_CODE: purchase.orderCode,
-      TARIFF_TITLE: purchase.tariff.title,
-      EXPIRES_AT: expiresAtStr,
-      NAME: purchase.user.name ?? "—",
-      PHONE: formattedPhone,
-      TELEGRAM_ID: String(purchase.user.telegramId),
-    });
-    const ykNote = purchase.ykPaymentId
-      ? t(TRN_YOOKASSA_PAID, {
-          YK_PAYMENT_ID: purchase.ykPaymentId,
-          ORDER_CODE: purchase.orderCode,
-        })
-      : "";
-    const trainerText = ykNote ? `${baseMsg}\n\n${ykNote}` : baseMsg;
+    const trainerText =
+      `✅ Новый ученик по тарифу «${purchase.tariff.title}»\n\n` +
+      `${paymentLine}\n` +
+      `Заказ: ${purchase.orderCode}\n` +
+      `Сумма: ${priceRubles} ₽\n` +
+      `Доступ до: ${expiresAtStr}\n\n` +
+      `Имя: ${purchase.user.name ?? "—"}\n` +
+      `Телефон: ${formattedPhone}\n` +
+      `Telegram: ${purchase.user.username ? `@${purchase.user.username}` : "—"} / id=${purchase.user.telegramId}\n\n` +
+      `Ссылки:\n` +
+      `${userLink}\n` +
+      `${usernameLink}`;
+
     await sendToTrainer(telegram, env.TRAINER_TELEGRAM_ID, trainerText, "TRN_CONFIRMED_SELF", purchase.id);
   }
 }

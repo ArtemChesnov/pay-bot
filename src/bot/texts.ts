@@ -261,7 +261,7 @@ export const TRN_BIND_OK =
   "✅ Общий чат привязан.\nОжидают доступа: {PENDING_COUNT}. Выдать сейчас?";
 
 export const TRN_INDIVIDUAL_NEW_STUDENT =
-  "✅ Новый ученик по индивидуальному тарифу\n\n" +
+  "✅ Новый ученик по тарифу «Индивидуальный»\n\n" +
   "{PAYMENT_LINE}\n" +
   "Заказ: {ORDER_CODE}\n" +
   "Сумма: {PRICE} ₽\n" +
