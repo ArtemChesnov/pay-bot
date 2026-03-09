@@ -301,7 +301,7 @@ export async function handleBindIndividualChat(ctx: BotContext) {
   });
 
   try {
-    const link = await createInviteLink(String(chat.id), env.TELEGRAM_BOT_TOKEN, expireMin);
+    const link = await createInviteLink(String(chat.id), env.TELEGRAM_BOT_TOKEN);
     const expiresAtStr = purchase.accessExpiresAt?.toLocaleDateString("ru-RU") ?? "";
     const msgText = t(MSG_CONFIRMED_INDIVIDUAL_GROUP_READY, { EXPIRES_AT: expiresAtStr, INVITE_LINK: link });
     await ctx.telegram.sendMessage(Number(purchase.user.telegramId), msgText, {
