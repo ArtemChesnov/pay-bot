@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getEnv } from "../../lib/env.js";
 import { logger } from "../../lib/logger.js";
 import { getSelfGroupId, setSelfGroupChatId, createInviteLink, isTrainer } from "../services.js";
+import { CALLBACK } from "../keyboards.js";
 import { Markup } from "telegraf";
 import { assertTransitionAllowed } from "../../lib/purchaseInvariants.js";
 import { isIgnorableTgError } from "../../lib/telegramErrors.js";
